@@ -1,0 +1,63 @@
+# AI Marketing System request examples
+#
+# Prerequisites:
+# - MongoDB running locally
+# - Ollama running locally
+# - API server started with `npm run dev` or `npm start`
+#
+# Replace placeholder IDs after each step.
+
+### Create a project
+curl -X POST http://localhost:3000/api/v1/projects \
+  -H "content-type: application/json" \
+  -d '{
+    "name": "Demo Project",
+    "clientName": "Acme Co",
+    "objective": "Increase CTR on Meta ads"
+  }'
+
+### Ingest a text source
+curl -X POST http://localhost:3000/api/v1/projects/<PROJECT_ID>/ingestions \
+  -H "content-type: application/json" \
+  -d '{
+    "type": "text",
+    "payload": {
+      "sourceName": "G2 reviews",
+      "text": "Customers want faster setup and lower costs."
+    }
+  }'
+
+### Normalize the ingestion
+curl -X POST http://localhost:3000/api/v1/projects/<PROJECT_ID>/normalizations \
+  -H "content-type: application/json" \
+  -d '{
+    "ingestionIds": ["<INGESTION_ID>"]
+  }'
+
+### Start analysis
+curl -X POST http://localhost:3000/api/v1/projects/<PROJECT_ID>/analyses \
+  -H "content-type: application/json" \
+  -d '{
+    "normalizedIds": ["<NORMALIZED_ID>"]
+  }'
+
+### Start creative generation
+curl -X POST http://localhost:3000/api/v1/projects/<PROJECT_ID>/creatives \
+  -H "content-type: application/json" \
+  -d '{
+    "analysisId": "<ANALYSIS_ID>"
+  }'
+
+### Generate report
+curl -X POST http://localhost:3000/api/v1/projects/<PROJECT_ID>/reports \
+  -H "content-type: application/json" \
+  -d '{
+    "analysisId": "<ANALYSIS_ID>",
+    "creativeId": "<CREATIVE_ID>"
+  }'
+
+### List jobs
+curl http://localhost:3000/api/v1/projects/<PROJECT_ID>/jobs
+
+### Download report placeholder
+curl -O http://localhost:3000/api/v1/reports/<REPORT_ID>/download

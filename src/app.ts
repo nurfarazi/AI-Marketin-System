@@ -1,8 +1,8 @@
 import express from 'express';
-import { createApiRouter } from './routes';
+import { createApiRouter, type Repositories } from './routes';
 import { errorHandler, notFoundHandler } from './middleware/errors';
 
-export function createApp() {
+export function createApp(repositories: Repositories) {
   const app = express();
 
   app.use(express.json({ limit: '10mb' }));
@@ -16,10 +16,9 @@ export function createApp() {
     });
   });
 
-  app.use('/api/v1', createApiRouter());
+  app.use('/api/v1', createApiRouter(repositories));
   app.use(notFoundHandler);
   app.use(errorHandler);
 
   return app;
 }
-
