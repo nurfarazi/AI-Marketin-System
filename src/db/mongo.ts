@@ -1,4 +1,4 @@
-import { MongoClient, type Collection, type Db } from 'mongodb';
+import { MongoClient, type Collection, type Db, type Document } from 'mongodb';
 
 const DEFAULT_URI = 'mongodb://127.0.0.1:27017';
 const DEFAULT_DB_NAME = 'ai_marketing_system';
@@ -40,7 +40,7 @@ export async function disconnectMongo() {
   db = null;
 }
 
-export function getCollection<T>(name: string): Collection<T> {
+export function getCollection<T extends Document>(name: string): Collection<T> {
   return getDb().collection<T>(name);
 }
 
@@ -63,5 +63,7 @@ export async function ensureIndexes() {
     database.collection('jobs').createIndex({ projectId: 1 }),
   ]);
 }
+
+export const connectMongo = connectToMongo;
 
 export type { MongoClient, Db, Collection };

@@ -1,18 +1,18 @@
 import 'dotenv/config';
 import { createApp } from './app';
-import { connectMongo, disconnectMongo, ensureIndexes } from './db/mongo';
+import { connectToMongo, disconnectMongo, ensureIndexes } from './db/mongo';
 import { createRepositories } from './repositories';
 
 const port = Number(process.env.PORT || 3000);
 
 async function main() {
-  const { db } = await connectMongo();
+  const { db } = await connectToMongo();
   await ensureIndexes();
   const repositories = createRepositories(db);
   const app = createApp(repositories);
   const server = app.listen(port, () => {
     // eslint-disable-next-line no-console
-    console.log(`AI Marketing System API listening on port ${port}`);
+    console.log(`AI Marketing System app is running on port ${port}`);
   });
 
   const shutdown = async () => {
