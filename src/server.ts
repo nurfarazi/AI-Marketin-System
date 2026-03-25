@@ -3,7 +3,7 @@ import { createApp } from './app';
 import { connectToMongo, disconnectMongo, ensureIndexes } from './db/mongo';
 import { createRepositories } from './repositories';
 
-const port = Number(process.env.PORT || 3000);
+const port = Number(process.env.PORT || 5011);
 
 async function main() {
   const { db } = await connectToMongo();

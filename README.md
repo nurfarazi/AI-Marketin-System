@@ -4,6 +4,8 @@ Requires Node.js 24 or newer.
 
 Minimal Express scaffold for the staged AI marketing pipeline. All AI/LLM features are designed to use the Ollama API only.
 
+The app defaults to port `5011` unless `PORT` is set in the environment.
+
 ## Prerequisites
 
 - Node.js 24+
@@ -32,6 +34,14 @@ For local development:
 ```bash
 npm run dev
 ```
+
+For Docker:
+
+```bash
+docker compose up --build
+```
+
+This starts MongoDB and the API together. The app container uses `mongodb://mongo:27017` internally and reaches Ollama through `host.docker.internal`.
 
 ## Endpoints
 
