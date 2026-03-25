@@ -75,6 +75,8 @@ function installOllamaMock() {
     const body = bodyText ? JSON.parse(bodyText) as { prompt?: string; messages?: Array<{ content?: string }> } : {};
     const prompt = body.prompt || body.messages?.map((message) => message.content || '').join('\n') || '';
 
+    await new Promise((resolve) => setTimeout(resolve, 150));
+
     if (path === '/api/chat') {
       return new Response(JSON.stringify({
         message: {
@@ -163,42 +165,83 @@ test('ollama-backed pipeline completes end-to-end', async () => {
   try {
     const project = await postJson(`${baseUrl}/api/v1/projects`, { name: 'Pipeline Demo', objective: 'Launch campaign' });
     const projectId = (project.data as JsonValue).id as string;
+    assert.equal((project.data as JsonValue).name, 'Pipeline Demo');
+
+    const projectsList = await fetchJson(`${baseUrl}/api/v1/projects`);
+    assert.equal((projectsList.data as JsonValue[]).length, 1);
 
     const ingestion = await postJson(`${baseUrl}/api/v1/projects/${projectId}/ingestions`, {
       type: 'text',
       payload: { text: 'Customers want faster setup and lower costs.' },
     });
     const ingestionId = (ingestion.data as JsonValue).id as string;
+    assert.equal((ingestion.data as JsonValue).status, 'received');
+
+    const ingestionsList = await fetchJson(`${baseUrl}/api/v1/projects/${projectId}/ingestions`);
+    assert.equal((ingestionsList.data as JsonValue[]).length, 1);
 
     const normalization = await postJson(`${baseUrl}/api/v1/projects/${projectId}/normalizations`, {
       ingestionIds: [ingestionId],
     });
+    const normalizationJob = (normalization.data as JsonValue).job as JsonValue;
+    assert.equal(normalizationJob.status, 'completed');
     const normalizedId = ((normalization.data as JsonValue).normalizedSources as JsonValue[])[0].id as string;
+    const normalizedSources = await fetchJson(`${baseUrl}/api/v1/projects/${projectId}/normalizations`);
+    assert.equal((normalizedSources.data as JsonValue[])[0].status, 'completed');
 
     const analysis = await postJson(`${baseUrl}/api/v1/projects/${projectId}/analyses`, {
       normalizedIds: [normalizedId],
     });
-    const analysisId = ((analysis.data as JsonValue).analysis as JsonValue).id as string;
-
-    await waitFor(() => fetchJson(`${baseUrl}/api/v1/analyses/${analysisId}`), (body) => (body.data as JsonValue).status === 'completed');
+    const analysisData = (analysis.data as JsonValue).analysis as JsonValue;
+    const analysisJob = (analysis.data as JsonValue).job as JsonValue;
+    const analysisId = analysisData.id as string;
+    assert.equal(analysisJob.status, 'queued');
+    await waitForJobStatus(baseUrl, analysisJob.id as string, 'running');
+    await waitForJobStatus(baseUrl, analysisJob.id as string, 'completed');
+    const fetchedAnalysis = await fetchJson(`${baseUrl}/api/v1/analyses/${analysisId}`);
+    assert.equal((fetchedAnalysis.data as JsonValue).status, 'completed');
+    assert.equal(((fetchedAnalysis.data as JsonValue).stages as JsonValue).insightExtraction, 'completed');
+    assert.ok((fetchedAnalysis.data as JsonValue).result);
 
     const creative = await postJson(`${baseUrl}/api/v1/projects/${projectId}/creatives`, { analysisId });
-    const creativeId = ((creative.data as JsonValue).creative as JsonValue).id as string;
-    await waitFor(() => fetchJson(`${baseUrl}/api/v1/creatives/${creativeId}`), (body) => (body.data as JsonValue).status === 'completed');
+    const creativeData = (creative.data as JsonValue).creative as JsonValue;
+    const creativeJob = (creative.data as JsonValue).job as JsonValue;
+    const creativeId = creativeData.id as string;
+    assert.equal(creativeJob.status, 'queued');
+    await waitForJobStatus(baseUrl, creativeJob.id as string, 'running');
+    await waitForJobStatus(baseUrl, creativeJob.id as string, 'completed');
+    const fetchedCreative = await fetchJson(`${baseUrl}/api/v1/creatives/${creativeId}`);
+    assert.equal((fetchedCreative.data as JsonValue).status, 'completed');
+    assert.ok((fetchedCreative.data as JsonValue).output);
 
     const report = await postJson(`${baseUrl}/api/v1/projects/${projectId}/reports`, {
       analysisId,
       creativeId,
     });
-    const reportId = ((report.data as JsonValue).report as JsonValue).id as string;
-    await waitFor(() => fetchJson(`${baseUrl}/api/v1/reports/${reportId}`), (body) => (body.data as JsonValue).status === 'completed');
+    const reportData = (report.data as JsonValue).report as JsonValue;
+    const reportJob = (report.data as JsonValue).job as JsonValue;
+    const reportId = reportData.id as string;
+    assert.equal(reportJob.status, 'queued');
+    await waitForJobStatus(baseUrl, reportJob.id as string, 'running');
+    await waitForJobStatus(baseUrl, reportJob.id as string, 'completed');
+    const fetchedReport = await fetchJson(`${baseUrl}/api/v1/reports/${reportId}`);
+    assert.equal((fetchedReport.data as JsonValue).status, 'completed');
+    assert.ok(typeof (fetchedReport.data as JsonValue).pdfUrl === 'string');
 
     const download = await realFetch(`${baseUrl}/api/v1/reports/${reportId}/download`);
     assert.equal(download.status, 200);
+    assert.match(await download.text(), /PDF export placeholder/);
 
     const jobs = await fetchJson(`${baseUrl}/api/v1/projects/${projectId}/jobs`);
     assert.ok(Array.isArray(jobs.data));
-    assert.ok((jobs.data as JsonValue[]).length >= 3);
+    const jobsByKind = new Map((jobs.data as JsonValue[]).map((job) => [job.kind as string, job]));
+    assert.ok(jobsByKind.has('normalization'));
+    assert.ok(jobsByKind.has('analysis'));
+    assert.ok(jobsByKind.has('creative'));
+    assert.ok(jobsByKind.has('report'));
+    for (const job of jobs.data as JsonValue[]) {
+      assert.equal(job.status, 'completed');
+    }
   } finally {
     restoreFetch();
     server.close();
@@ -207,11 +250,18 @@ test('ollama-backed pipeline completes end-to-end', async () => {
 });
 
 async function waitFor(fetcher: () => Promise<JsonValue>, predicate: (body: JsonValue) => boolean) {
-  for (let attempt = 0; attempt < 20; attempt += 1) {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
     const body = await fetcher();
     if (predicate(body)) return body;
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
 
   throw new Error('Timed out waiting for async pipeline completion.');
+}
+
+async function waitForJobStatus(baseUrl: string, jobId: string, desiredStatus: string) {
+  return waitFor(
+    () => fetchJson(`${baseUrl}/api/v1/jobs/${jobId}`),
+    (body) => (body.data as JsonValue).status === desiredStatus,
+  );
 }

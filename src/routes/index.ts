@@ -74,6 +74,11 @@ function createTimestamp() {
   return new Date().toISOString();
 }
 
+function getRouteParam(value: string | string[] | undefined) {
+  if (Array.isArray(value)) return value[0] ?? '';
+  return value ?? '';
+}
+
 function handleRepositoryError(res: Response, error: unknown) {
   const message = error instanceof Error ? error.message : 'Database unavailable.';
   const isMongo =
@@ -131,6 +136,7 @@ async function completeJob(
   if (error) job.error = error;
   await repositories.jobs.update(job.id, {
     status: job.status,
+    startedAt: job.startedAt,
     completedAt: job.completedAt,
     updatedAt: job.updatedAt,
     output: job.output,
@@ -174,13 +180,15 @@ export function createApiRouter(repositories: Repositories) {
   }));
 
   router.get('/projects/:projectId', safe(async (req, res) => {
-    const project = await projects.getById(req.params.projectId);
+    const projectId = getRouteParam(req.params.projectId);
+    const project = await projects.getById(projectId);
     if (!project) return res.status(404).json({ error: 'Project not found.' });
     return res.json({ data: project });
   }));
 
   router.post('/projects/:projectId/ingestions', safe(async (req, res) => {
-    const project = await projects.getById(req.params.projectId);
+    const projectId = getRouteParam(req.params.projectId);
+    const project = await projects.getById(projectId);
     if (!project) return res.status(404).json({ error: 'Project not found.' });
 
     const payload = req.body as IngestionBody;
@@ -193,7 +201,7 @@ export function createApiRouter(repositories: Repositories) {
 
     const ingestion: Ingestion = {
       id: createId('ing'),
-      projectId: req.params.projectId,
+      projectId,
       type: payload.type,
       status: 'received',
       payload: payload.payload,
@@ -206,13 +214,15 @@ export function createApiRouter(repositories: Repositories) {
   }));
 
   router.get('/projects/:projectId/ingestions', safe(async (req, res) => {
-    const project = await projects.getById(req.params.projectId);
+    const projectId = getRouteParam(req.params.projectId);
+    const project = await projects.getById(projectId);
     if (!project) return res.status(404).json({ error: 'Project not found.' });
-    return res.json({ data: await ingestions.listByProject(req.params.projectId) });
+    return res.json({ data: await ingestions.listByProject(projectId) });
   }));
 
   router.post('/projects/:projectId/normalizations', safe(async (req, res) => {
-    const project = await projects.getById(req.params.projectId);
+    const projectId = getRouteParam(req.params.projectId);
+    const project = await projects.getById(projectId);
     if (!project) return res.status(404).json({ error: 'Project not found.' });
 
     const ingestionIds = Array.isArray(req.body?.ingestionIds)
@@ -221,14 +231,14 @@ export function createApiRouter(repositories: Repositories) {
 
     const ingestionsList = ingestionIds
       ? await Promise.all(ingestionIds.map((id: string) => ingestions.getById(id)))
-      : await ingestions.listByProject(req.params.projectId);
+      : await ingestions.listByProject(projectId);
     const ingestionsToNormalize = ingestionsList.filter(Boolean) as Ingestion[];
 
     if (!ingestionsToNormalize.length) {
       return res.status(400).json({ error: 'No ingestions available for normalization.' });
     }
 
-    const job = createJob('normalization', req.params.projectId, {
+    const job = createJob('normalization', projectId, {
       ingestionIds: ingestionsToNormalize.map((ing) => ing.id),
     });
     await jobs.create(job);
@@ -278,29 +288,31 @@ export function createApiRouter(repositories: Repositories) {
   }));
 
   router.get('/projects/:projectId/normalizations', safe(async (req, res) => {
-    const project = await projects.getById(req.params.projectId);
+    const projectId = getRouteParam(req.params.projectId);
+    const project = await projects.getById(projectId);
     if (!project) return res.status(404).json({ error: 'Project not found.' });
-    return res.json({ data: await normalizedSources.listByProject(req.params.projectId) });
+    return res.json({ data: await normalizedSources.listByProject(projectId) });
   }));
 
   router.post('/projects/:projectId/analyses', safe(async (req, res) => {
-    const project = await projects.getById(req.params.projectId);
+    const projectId = getRouteParam(req.params.projectId);
+    const project = await projects.getById(projectId);
     if (!project) return res.status(404).json({ error: 'Project not found.' });
 
     const normalizedIds = Array.isArray(req.body?.normalizedIds)
       ? req.body.normalizedIds.filter((id: unknown) => typeof id === 'string')
-      : (await normalizedSources.listByProject(req.params.projectId)).map((item) => item.id);
+      : (await normalizedSources.listByProject(projectId)).map((item) => item.id);
 
     if (!normalizedIds.length) {
       return res.status(400).json({ error: 'No normalized sources available for analysis.' });
     }
 
-    const job = createJob('analysis', req.params.projectId, { normalizedIds });
+    const job = createJob('analysis', projectId, { normalizedIds });
     await jobs.create(job);
 
     const analysis: Analysis = {
       id: createId('ana'),
-      projectId: req.params.projectId,
+      projectId,
       jobId: job.id,
       status: 'queued',
       inputNormalizedIds: normalizedIds,
@@ -321,28 +333,31 @@ export function createApiRouter(repositories: Repositories) {
   }));
 
   router.get('/projects/:projectId/analyses', safe(async (req, res) => {
-    const project = await projects.getById(req.params.projectId);
+    const projectId = getRouteParam(req.params.projectId);
+    const project = await projects.getById(projectId);
     if (!project) return res.status(404).json({ error: 'Project not found.' });
-    return res.json({ data: await analyses.listByProject(req.params.projectId) });
+    return res.json({ data: await analyses.listByProject(projectId) });
   }));
 
   router.get('/analyses/:analysisId', safe(async (req, res) => {
-    const analysis = await analyses.getById(req.params.analysisId);
+    const analysisId = getRouteParam(req.params.analysisId);
+    const analysis = await analyses.getById(analysisId);
     if (!analysis) return res.status(404).json({ error: 'Analysis not found.' });
     return res.json({ data: analysis });
   }));
 
   router.post('/projects/:projectId/creatives', safe(async (req, res) => {
-    const project = await projects.getById(req.params.projectId);
+    const projectId = getRouteParam(req.params.projectId);
+    const project = await projects.getById(projectId);
     if (!project) return res.status(404).json({ error: 'Project not found.' });
 
     const analysisId = typeof req.body?.analysisId === 'string' ? req.body.analysisId : undefined;
-    const job = createJob('creative', req.params.projectId, { analysisId });
+    const job = createJob('creative', projectId, { analysisId });
     await jobs.create(job);
 
     const creative: Creative = {
       id: createId('cre'),
-      projectId: req.params.projectId,
+      projectId,
       jobId: job.id,
       status: 'queued',
       analysisId,
@@ -358,35 +373,39 @@ export function createApiRouter(repositories: Repositories) {
   }));
 
   router.get('/projects/:projectId/creatives', safe(async (req, res) => {
-    const project = await projects.getById(req.params.projectId);
+    const projectId = getRouteParam(req.params.projectId);
+    const project = await projects.getById(projectId);
     if (!project) return res.status(404).json({ error: 'Project not found.' });
-    return res.json({ data: await creatives.listByProject(req.params.projectId) });
+    return res.json({ data: await creatives.listByProject(projectId) });
   }));
 
   router.get('/creatives/:creativeId', safe(async (req, res) => {
-    const creative = await creatives.getById(req.params.creativeId);
+    const creativeId = getRouteParam(req.params.creativeId);
+    const creative = await creatives.getById(creativeId);
     if (!creative) return res.status(404).json({ error: 'Creative not found.' });
     return res.json({ data: creative });
   }));
 
   router.get('/projects/:projectId/reports', safe(async (req, res) => {
-    const project = await projects.getById(req.params.projectId);
+    const projectId = getRouteParam(req.params.projectId);
+    const project = await projects.getById(projectId);
     if (!project) return res.status(404).json({ error: 'Project not found.' });
-    return res.json({ data: await reports.listByProject(req.params.projectId) });
+    return res.json({ data: await reports.listByProject(projectId) });
   }));
 
   router.post('/projects/:projectId/reports', safe(async (req, res) => {
-    const project = await projects.getById(req.params.projectId);
+    const projectId = getRouteParam(req.params.projectId);
+    const project = await projects.getById(projectId);
     if (!project) return res.status(404).json({ error: 'Project not found.' });
 
     const analysisId = typeof req.body?.analysisId === 'string' ? req.body.analysisId : null;
     const creativeId = typeof req.body?.creativeId === 'string' ? req.body.creativeId : null;
-    const job = createJob('report', req.params.projectId, { analysisId, creativeId });
+    const job = createJob('report', projectId, { analysisId, creativeId });
     await jobs.create(job);
 
     const report: Report = {
       id: createId('rep'),
-      projectId: req.params.projectId,
+      projectId,
       jobId: job.id,
       analysisId,
       creativeId,
@@ -403,26 +422,30 @@ export function createApiRouter(repositories: Repositories) {
   }));
 
   router.get('/reports/:reportId', safe(async (req, res) => {
-    const report = await reports.getById(req.params.reportId);
+    const reportId = getRouteParam(req.params.reportId);
+    const report = await reports.getById(reportId);
     if (!report) return res.status(404).json({ error: 'Report not found.' });
     return res.json({ data: report });
   }));
 
   router.get('/reports/:reportId/download', safe(async (req, res) => {
-    const report = await reports.getById(req.params.reportId);
+    const reportId = getRouteParam(req.params.reportId);
+    const report = await reports.getById(reportId);
     if (!report) return res.status(404).json({ error: 'Report not found.' });
     if (!report.pdfUrl) return res.status(409).json({ error: 'Report is not ready for download.' });
     return res.type('text/plain').send(`PDF export placeholder for report ${report.id}`);
   }));
 
   router.get('/projects/:projectId/jobs', safe(async (req, res) => {
-    const project = await projects.getById(req.params.projectId);
+    const projectId = getRouteParam(req.params.projectId);
+    const project = await projects.getById(projectId);
     if (!project) return res.status(404).json({ error: 'Project not found.' });
-    return res.json({ data: await jobs.listByProject(req.params.projectId) });
+    return res.json({ data: await jobs.listByProject(projectId) });
   }));
 
   router.get('/jobs/:jobId', safe(async (req, res) => {
-    const job = await jobs.getById(req.params.jobId);
+    const jobId = getRouteParam(req.params.jobId);
+    const job = await jobs.getById(jobId);
     if (!job) return res.status(404).json({ error: 'Job not found.' });
     return res.json({ data: job });
   }));
