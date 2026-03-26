@@ -522,6 +522,14 @@ textarea {
   color: #dce5f1;
 }
 
+.error-text {
+  display: block;
+  margin-top: 0.35rem;
+  color: var(--danger);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
 .mini-list {
   display: grid;
   gap: 0.7rem;

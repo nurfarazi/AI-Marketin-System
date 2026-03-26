@@ -1,17 +1,15 @@
 import { MongoClient, type Collection, type Db, type Document } from 'mongodb';
-
-const DEFAULT_URI = 'mongodb://127.0.0.1:27017';
-const DEFAULT_DB_NAME = 'ai_marketing_system';
+import { readTrimmedEnv } from '../config/env';
 
 let client: MongoClient | null = null;
 let db: Db | null = null;
 
 function getMongoUri() {
-  return process.env.MONGO_URI || DEFAULT_URI;
+  return readTrimmedEnv('MONGO_URI');
 }
 
 function getMongoDbName() {
-  return process.env.MONGO_DB_NAME || process.env.MONGO_DB || DEFAULT_DB_NAME;
+  return readTrimmedEnv('MONGO_DB_NAME');
 }
 
 export async function connectToMongo() {

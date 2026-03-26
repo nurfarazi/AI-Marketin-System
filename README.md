@@ -4,26 +4,27 @@ Requires Node.js 24 or newer.
 
 Minimal Express scaffold for the staged AI marketing pipeline. All AI/LLM features are designed to use the Ollama API only.
 
-The app defaults to port `5011` unless `PORT` is set in the environment.
+Set `PORT` in your environment before starting the app.
 
 There is also a React dashboard in [`web/`](/mnt/d/git/Hobby/AI-Marketin-System/web) for creating projects, capturing inputs, running the workflow, and downloading reports.
 
 ## Prerequisites
 
 - Node.js 24+
-- Ollama running locally (default: `http://localhost:11434`)
-- MongoDB running locally (default: `mongodb://127.0.0.1:27017`)
+- Ollama running locally
+- MongoDB running locally
 - A local `.env` file for environment variables
 
-Environment variables:
+- `PORT`
+- `LOG_LEVEL`
+- `CORS_ORIGIN`
+- `MONGO_URI`
+- `MONGO_DB_NAME`
+- `OLLAMA_BASE_URL`
+- `OLLAMA_MODEL`
+- `OLLAMA_TEMPERATURE`
 
-- `MONGO_URI` (defaults to `mongodb://127.0.0.1:27017`)
-- `MONGO_DB_NAME` (defaults to `ai_marketing_system`)
-- `OLLAMA_BASE_URL` (defaults to `http://127.0.0.1:11434`)
-- `OLLAMA_MODEL` (defaults to `llama3.1`)
-- `PORT` (defaults to `5011`)
-
-Copy [`.env.example`](/mnt/d/git/Hobby/AI-Marketin-System/.env.example) to `.env` to get the local defaults in one place.
+Copy [`.env.example`](/mnt/d/git/Hobby/AI-Marketin-System/.env.example) to `.env` and fill in the required values before starting the app.
 
 ## How To Run
 
@@ -33,14 +34,14 @@ Copy [`.env.example`](/mnt/d/git/Hobby/AI-Marketin-System/.env.example) to `.env
 cp .env.example .env
 ```
 
-The example file is ready for local development. If you want the API to run on a different port, change `PORT` in `.env` and point the frontend to the same URL.
+The example file is ready for local development. Set the values to match your machine, especially `PORT`, `MONGO_URI`, `MONGO_DB_NAME`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL`, and `OLLAMA_TEMPERATURE`.
 
 ### 2. Start MongoDB and Ollama
 
 Run both locally before starting the API, or use Docker Compose to bring MongoDB up for you.
 
-- MongoDB: `mongodb://127.0.0.1:27017`
-- Ollama: `http://127.0.0.1:11434`
+- MongoDB: whatever `MONGO_URI` points to in your `.env`
+- Ollama: whatever `OLLAMA_BASE_URL` points to in your `.env`
 
 ### 3. Install dependencies
 
@@ -66,7 +67,7 @@ npm run build
 npm start
 ```
 
-The API runs on `http://localhost:5011` by default.
+The API runs on the `PORT` value from your `.env`.
 
 ### 5. Run the frontend
 

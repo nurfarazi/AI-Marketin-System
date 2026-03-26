@@ -2,8 +2,10 @@ import 'dotenv/config';
 import { createApp } from './app';
 import { connectToMongo, disconnectMongo, ensureIndexes } from './db/mongo';
 import { createRepositories } from './repositories';
+import { readNumberEnv } from './config/env';
+import { logger } from './utils/logger';
 
-const port = Number(process.env.PORT || 5011);
+const port = readNumberEnv('PORT');
 
 async function main() {
   const { db } = await connectToMongo();
@@ -11,11 +13,11 @@ async function main() {
   const repositories = createRepositories(db);
   const app = createApp(repositories);
   const server = app.listen(port, () => {
-    // eslint-disable-next-line no-console
-    console.log(`AI Marketing System app is running on port ${port}`);
+    logger.info(`AI Marketing System app is running on port ${port}`);
   });
 
   const shutdown = async () => {
+    logger.info('Shutting down API server.');
     server.close();
     await disconnectMongo();
   };
@@ -25,7 +27,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  // eslint-disable-next-line no-console
-  console.error('Failed to start API server:', error);
+  logger.error('Failed to start API server.', error);
   process.exit(1);
 });

@@ -1,17 +1,20 @@
 # MongoDB + Ollama API Examples (curl)
 
 These examples assume:
-- MongoDB is running locally at `mongodb://127.0.0.1:27017`
-- Ollama is running locally at `http://127.0.0.1:11434`
-- The API server is running at `http://localhost:5011`
+- MongoDB is reachable at the `MONGO_URI` value in your `.env`
+- Ollama is reachable at the `OLLAMA_BASE_URL` value in your `.env`
+- The API server is running at the `PORT` value in your `.env`
 
 If you are using a `.env` file, typical entries are:
 ```
 PORT=5011
+LOG_LEVEL=info
+CORS_ORIGIN=*
 MONGO_URI=mongodb://127.0.0.1:27017
-MONGO_DB=ai_marketing_system
+MONGO_DB_NAME=ai_marketing_system
 OLLAMA_BASE_URL=http://127.0.0.1:11434
 OLLAMA_MODEL=llama3.1
+OLLAMA_TEMPERATURE=0.2
 ```
 
 ## Scenario 1: Create a project

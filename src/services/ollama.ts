@@ -1,3 +1,5 @@
+import { readNumberEnv, readTrimmedEnv } from '../config/env';
+
 type OllamaGenerateRequest = {
   model: string;
   prompt: string;
@@ -36,23 +38,26 @@ type OllamaConfig = {
   temperature?: number;
 };
 
-const DEFAULT_BASE_URL = 'http://127.0.0.1:11434';
-const DEFAULT_MODEL = 'llama3.1';
-
 function getConfig(overrides?: OllamaConfig) {
   return {
-    baseUrl: overrides?.baseUrl || process.env.OLLAMA_BASE_URL || DEFAULT_BASE_URL,
-    model: overrides?.model || process.env.OLLAMA_MODEL || DEFAULT_MODEL,
-    temperature: overrides?.temperature ?? Number(process.env.OLLAMA_TEMPERATURE ?? 0.2),
+    baseUrl: overrides?.baseUrl ?? readTrimmedEnv('OLLAMA_BASE_URL'),
+    model: overrides?.model ?? readTrimmedEnv('OLLAMA_MODEL'),
+    temperature: overrides?.temperature ?? readNumberEnv('OLLAMA_TEMPERATURE'),
   };
 }
 
 async function postJson<T>(baseUrl: string, path: string, payload: unknown): Promise<T> {
-  const response = await fetch(`${baseUrl}${path}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}${path}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    }); 
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : 'Unknown network failure.';
+    throw new Error(`Unable to reach Ollama at ${baseUrl}${path}. Is Ollama running? ${reason}`);
+  }
 
   if (!response.ok) {
     const text = await response.text();
