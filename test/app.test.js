@@ -10,10 +10,34 @@ const app_1 = require("../src/app");
 const mongo_1 = require("../src/db/mongo");
 const repositories_1 = require("../src/repositories");
 const realFetch = globalThis.fetch.bind(globalThis);
-const mongoUri = process.env.MONGO_URI ?? 'mongodb://127.0.0.1:27017';
-const mongoDbName = process.env.MONGO_DB_NAME ?? 'ai_marketing_system_test';
-process.env.MONGO_URI ??= mongoUri;
-process.env.MONGO_DB_NAME ??= mongoDbName;
+const testEnv = {
+    mongoUri: 'mongodb://127.0.0.1:27017',
+    mongoDbName: 'ai_marketing_system_test',
+    port: '5011',
+    corsOrigin: '*',
+    logLevel: 'info',
+    ollamaBaseUrl: 'http://127.0.0.1:11434',
+    ollamaModel: 'llama3.1',
+    ollamaTemperature: '0.2',
+};
+if (!process.env.PORT)
+    process.env.PORT = testEnv.port;
+if (!process.env.CORS_ORIGIN)
+    process.env.CORS_ORIGIN = testEnv.corsOrigin;
+if (!process.env.LOG_LEVEL)
+    process.env.LOG_LEVEL = testEnv.logLevel;
+if (!process.env.OLLAMA_BASE_URL)
+    process.env.OLLAMA_BASE_URL = testEnv.ollamaBaseUrl;
+if (!process.env.OLLAMA_MODEL)
+    process.env.OLLAMA_MODEL = testEnv.ollamaModel;
+if (!process.env.OLLAMA_TEMPERATURE)
+    process.env.OLLAMA_TEMPERATURE = testEnv.ollamaTemperature;
+if (!process.env.MONGO_URI)
+    process.env.MONGO_URI = testEnv.mongoUri;
+if (!process.env.MONGO_DB_NAME)
+    process.env.MONGO_DB_NAME = testEnv.mongoDbName;
+const mongoUri = process.env.MONGO_URI;
+const mongoDbName = process.env.MONGO_DB_NAME;
 async function startServer() {
     const { db } = await (0, mongo_1.connectToMongo)();
     const app = (0, app_1.createApp)((0, repositories_1.createRepositories)(db));

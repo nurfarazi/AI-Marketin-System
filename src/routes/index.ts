@@ -1,12 +1,7 @@
 import express, { type Request, type Response } from 'express';
 import { createId } from '../utils/id';
 import { generateCreativeConcepts } from '../services/creative-generator';
-import {
-  normalizeCsvSource,
-  normalizeImageSource,
-  normalizeTextSource,
-  normalizeUrlSource,
-} from '../services/normalizers';
+import { normalizeIngestionWithOllama } from '../services/normalization';
 import { generateReportNarrative } from '../services/report-generator';
 import { runFullPipeline, type NormalizedInput, type PipelineOutput } from '../services/pipeline';
 import type {
@@ -19,6 +14,7 @@ import type {
   JobKind,
   JobStatus,
   NormalizedSource,
+  NormalizedSourceData,
   Project,
   Report,
 } from '../types';
@@ -43,6 +39,7 @@ export type Repositories = {
     create: (source: NormalizedSource) => Promise<NormalizedSource>;
     listByProject: (projectId: string) => Promise<NormalizedSource[]>;
     getById: (id: string) => Promise<NormalizedSource | null>;
+    update: (id: string, update: Partial<NormalizedSource>) => Promise<void>;
   };
   analyses: {
     create: (analysis: Analysis) => Promise<Analysis>;
@@ -74,6 +71,10 @@ function createTimestamp() {
   return new Date().toISOString();
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
 function getRouteParam(value: string | string[] | undefined) {
   if (Array.isArray(value)) return value[0] ?? '';
   return value ?? '';
@@ -96,7 +97,7 @@ function safe(
   };
 }
 
-function createJob(kind: JobKind, projectId: string, input?: Record<string, unknown>): Job {
+function createJob(kind: JobKind, projectId: string, input?: Record<string, unknown>, maxRetries = 2): Job {
   const now = createTimestamp();
   return {
     id: createId('job'),
@@ -104,7 +105,7 @@ function createJob(kind: JobKind, projectId: string, input?: Record<string, unkn
     kind,
     status: 'queued',
     retries: 0,
-    maxRetries: 2,
+    maxRetries,
     input,
     createdAt: now,
     updatedAt: now,
@@ -136,12 +137,122 @@ async function completeJob(
   if (error) job.error = error;
   await repositories.jobs.update(job.id, {
     status: job.status,
+    retries: job.retries,
     startedAt: job.startedAt,
     completedAt: job.completedAt,
     updatedAt: job.updatedAt,
     output: job.output,
     error: job.error,
   });
+}
+
+function normalizeSourceData(source: NormalizedSource): NormalizedSourceData | null {
+  return isRecord(source.data) ? (source.data as NormalizedSourceData) : null;
+}
+
+function normalizedSourceToInput(source: NormalizedSource): NormalizedInput {
+  const data = normalizeSourceData(source);
+  const content =
+    data?.content ||
+    data?.summary ||
+    data?.extractedText ||
+    JSON.stringify(data ?? {});
+
+  return {
+    kind: data?.sourceType || data?.kind || 'normalized',
+    content,
+    meta: {
+      sourceId: source.id,
+      ingestionId: source.ingestionId,
+      sourceType: data?.sourceType,
+    },
+  };
+}
+
+async function queueNormalization(repositories: Repositories, ingestion: Ingestion) {
+  const now = createTimestamp();
+  const existing = (await repositories.normalizedSources.listByProject(ingestion.projectId))
+    .find((source) => source.ingestionId === ingestion.id);
+
+  let source: NormalizedSource | null;
+  if (existing) {
+    await repositories.normalizedSources.update(existing.id, {
+      status: 'queued',
+      data: null,
+      error: undefined,
+      updatedAt: now,
+    });
+    source = await repositories.normalizedSources.getById(existing.id);
+  } else {
+    source = await repositories.normalizedSources.create({
+      id: createId('norm'),
+      projectId: ingestion.projectId,
+      ingestionId: ingestion.id,
+      status: 'queued',
+      data: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  if (!source) {
+    throw new Error('Could not queue normalization source.');
+  }
+
+  const job = createJob(
+    'normalization',
+    ingestion.projectId,
+    {
+      ingestionId: ingestion.id,
+      sourceId: source.id,
+      sourceType: ingestion.type,
+    },
+    1,
+  );
+  await repositories.jobs.create(job);
+
+  return { job, source };
+}
+
+async function runNormalizationPipeline(repositories: Repositories, ingestionId: string, jobId: string) {
+  const ingestion = await repositories.ingestions.getById(ingestionId);
+  const job = await repositories.jobs.getById(jobId);
+  if (!ingestion || !job) return;
+
+  const sources = await repositories.normalizedSources.listByProject(ingestion.projectId);
+  const normalizedSource = sources.find((source) => source.ingestionId === ingestion.id);
+  if (!normalizedSource) return;
+
+  try {
+    await startJob(repositories, job);
+    const result = await normalizeIngestionWithOllama(ingestion);
+    job.retries = Math.max(0, result.attempts - 1);
+    await repositories.normalizedSources.update(normalizedSource.id, {
+      status: 'completed',
+      data: result.data,
+      error: undefined,
+      updatedAt: createTimestamp(),
+    });
+    await completeJob(repositories, job, 'completed', {
+      ingestionId: ingestion.id,
+      normalizedSourceId: normalizedSource.id,
+      sourceType: ingestion.type,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown normalization error.';
+    job.retries = Math.min(1, job.retries + 1);
+    await repositories.normalizedSources.update(normalizedSource.id, {
+      status: 'failed',
+      data: null,
+      error: message,
+      updatedAt: createTimestamp(),
+    });
+    await completeJob(repositories, job, 'failed', {
+      ingestionId: ingestion.id,
+      normalizedSourceId: normalizedSource.id,
+      sourceType: ingestion.type,
+    }, message);
+  }
 }
 
 export function createApiRouter(repositories: Repositories) {
@@ -210,6 +321,8 @@ export function createApiRouter(repositories: Repositories) {
     };
 
     await ingestions.create(ingestion);
+    const queuedNormalization = await queueNormalization(repositories, ingestion);
+    setImmediate(() => runNormalizationPipeline(repositories, ingestion.id, queuedNormalization.job.id));
     return res.status(201).json({ data: ingestion });
   }));
 
@@ -238,53 +351,16 @@ export function createApiRouter(repositories: Repositories) {
       return res.status(400).json({ error: 'No ingestions available for normalization.' });
     }
 
-    const job = createJob('normalization', projectId, {
-      ingestionIds: ingestionsToNormalize.map((ing) => ing.id),
-    });
-    await jobs.create(job);
-    await startJob(repositories, job);
-
     const normalizedSourcesList: NormalizedSource[] = [];
+    const queuedJobs: Job[] = [];
     for (const ingestion of ingestionsToNormalize) {
-      const normalized = normalizeIngestion(ingestion);
-      if (!normalized) {
-        const failed: NormalizedSource = {
-          id: createId('norm'),
-          projectId: ingestion.projectId,
-          ingestionId: ingestion.id,
-          status: 'failed',
-          error: 'Unsupported ingestion payload for normalization.',
-          createdAt: createTimestamp(),
-          updatedAt: createTimestamp(),
-        };
-        await normalizedSources.create(failed);
-        normalizedSourcesList.push(failed);
-        continue;
-      }
-
-      const source: NormalizedSource = {
-        id: createId('norm'),
-        projectId: ingestion.projectId,
-        ingestionId: ingestion.id,
-        status: 'completed',
-        data: normalized,
-        createdAt: createTimestamp(),
-        updatedAt: createTimestamp(),
-      };
-      await normalizedSources.create(source);
-      normalizedSourcesList.push(source);
+      const queuedNormalization = await queueNormalization(repositories, ingestion);
+      normalizedSourcesList.push(queuedNormalization.source);
+      queuedJobs.push(queuedNormalization.job);
+      setImmediate(() => runNormalizationPipeline(repositories, ingestion.id, queuedNormalization.job.id));
     }
 
-    const allCompleted = normalizedSourcesList.every((item) => item.status === 'completed');
-    await completeJob(
-      repositories,
-      job,
-      allCompleted ? 'completed' : 'failed',
-      { normalizedIds: normalizedSourcesList.map((item) => item.id) },
-      allCompleted ? undefined : 'One or more normalizations failed.',
-    );
-
-    return res.status(202).json({ data: { job, normalizedSources: normalizedSourcesList } });
+    return res.status(202).json({ data: { job: queuedJobs[0] ?? null, normalizedSources: normalizedSourcesList } });
   }));
 
   router.get('/projects/:projectId/normalizations', safe(async (req, res) => {
@@ -299,14 +375,21 @@ export function createApiRouter(repositories: Repositories) {
     const project = await projects.getById(projectId);
     if (!project) return res.status(404).json({ error: 'Project not found.' });
 
-    const normalizedIds = Array.isArray(req.body?.normalizedIds)
+    const requestedIds = Array.isArray(req.body?.normalizedIds)
       ? req.body.normalizedIds.filter((id: unknown) => typeof id === 'string')
-      : (await normalizedSources.listByProject(projectId)).map((item) => item.id);
+      : null;
 
-    if (!normalizedIds.length) {
+    const requestedSources = requestedIds
+      ? (await Promise.all(requestedIds.map((id: string) => normalizedSources.getById(id)))).filter(Boolean) as NormalizedSource[]
+      : (await normalizedSources.listByProject(projectId)).filter((item) => item.status === 'completed');
+
+    const completedSources = requestedSources.filter((item) => item.status === 'completed');
+
+    if (!completedSources.length) {
       return res.status(400).json({ error: 'No normalized sources available for analysis.' });
     }
 
+    const normalizedIds = completedSources.map((item) => item.id);
     const job = createJob('analysis', projectId, { normalizedIds });
     await jobs.create(job);
 
@@ -451,37 +534,6 @@ export function createApiRouter(repositories: Repositories) {
   }));
 
   return router;
-}
-
-function normalizeIngestion(ingestion: Ingestion) {
-  const payload = ingestion.payload ?? {};
-  const sourceHandlers = {
-    url: () => normalizeUrlSource(payload),
-    text: () => normalizeTextSource(payload),
-    image: () => normalizeImageSource(payload),
-    csv: () => normalizeCsvSource(payload),
-  } as const;
-
-  return sourceHandlers[ingestion.type] ? sourceHandlers[ingestion.type]() : null;
-}
-
-function normalizedSourceToInput(source: NormalizedSource): NormalizedInput {
-  const data = source.data as Record<string, unknown> | undefined;
-  const content =
-    typeof data?.extractedText === 'string'
-      ? data.extractedText
-      : typeof data?.text === 'string'
-        ? data.text
-        : JSON.stringify(data ?? {});
-
-  return {
-    kind: typeof data?.kind === 'string' ? data.kind : 'normalized',
-    content,
-    meta: {
-      sourceId: source.id,
-      ingestionId: source.ingestionId,
-    },
-  };
 }
 
 async function runAnalysisPipeline(repositories: Repositories, analysisId: string, jobId: string) {

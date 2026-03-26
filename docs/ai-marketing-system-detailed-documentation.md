@@ -46,8 +46,7 @@ The job entity is the source of truth for pipeline execution and supports retrie
 All AI calls use Ollama’s local REST API. This keeps model inference on the local machine or server, enabling privacy and predictable costs.
 
 Key characteristics:
-- Base URL: `http://127.0.0.1:11434` (configurable via environment).
-- Default model: `llama3.1` (configurable).
+- Base URL and model are required environment values.
 - Non-streaming responses for simplicity and stable parsing.
 
 AI usage by stage:
@@ -127,7 +126,7 @@ Each sprint should result in a demoable increment and maintain the Ollama-only A
 - MongoDB is the system of record; connection and authentication are expected to be managed by the deployment environment.
 - No authentication or multi-tenant security is enforced yet.
 - PDF generation is represented as a placeholder download path.
-- Ollama model responses are assumed to be well-formed JSON where required; parsing includes safe fallback behavior.
+- Ollama model responses are assumed to be well-formed JSON where required; parsing includes validation and retry behavior.
 - The UI/dashboard is optional and not implemented in the current backend scope.
 
 ## Notes on Future Extensions

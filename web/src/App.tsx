@@ -444,7 +444,7 @@ export default function App() {
     await runAction(
       'ingestion',
       () => api.createIngestion(activeProjectId, sourceType, payload),
-      'Source captured. Run normalization next.',
+      'Source captured. Ollama normalization starts automatically.',
     );
     await refreshActiveProject();
   }
@@ -795,10 +795,10 @@ export default function App() {
           <Panel
             eyebrow="2 · Normalize"
             title="Clean and shape the inputs"
-            description="Turn the captured source records into a standardized form ready for analysis."
+            description="Ollama rewrites each captured source into a shared schema ready for analysis."
             action={
               <button className="button button--ghost" type="button" onClick={() => void handleNormalize()} disabled={busyAction === 'normalization'}>
-                {busyAction === 'normalization' ? 'Running...' : 'Normalize all'}
+                {busyAction === 'normalization' ? 'Running...' : 'Re-run normalization'}
               </button>
             }
           >
@@ -806,7 +806,7 @@ export default function App() {
               {bundle.normalizedSources.length === 0 ? (
                 <div className="empty-state compact">
                   <p>No normalized sources yet.</p>
-                  <span>Normalize after you capture at least one ingestion.</span>
+                  <span>Normalization starts automatically after each ingestion.</span>
                 </div>
               ) : (
                 bundle.normalizedSources.slice().reverse().map((source) => (
@@ -816,6 +816,7 @@ export default function App() {
                       <Pill tone={statusTone(source.status)}>{source.status}</Pill>
                     </div>
                     <p>{source.ingestionId}</p>
+                    {source.status === 'failed' && source.error ? <small className="error-text">{source.error}</small> : null}
                     <small>{formatTime(source.createdAt)}</small>
                   </article>
                 ))

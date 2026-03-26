@@ -1,12 +1,15 @@
 import express from 'express';
 import { createApiRouter, type Repositories } from './routes';
 import { errorHandler, notFoundHandler } from './middleware/errors';
+import { requestLogger } from './utils/logger';
+import { readTrimmedEnv } from './config/env';
 
 export function createApp(repositories: Repositories) {
   const app = express();
+  const corsOrigin = readTrimmedEnv('CORS_ORIGIN');
 
   app.use((req, res, next) => {
-    res.setHeader('Access-Control-Allow-Origin', process.env.CORS_ORIGIN || '*');
+    res.setHeader('Access-Control-Allow-Origin', corsOrigin);
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     if (req.method === 'OPTIONS') {
@@ -16,6 +19,7 @@ export function createApp(repositories: Repositories) {
     next();
   });
 
+  app.use(requestLogger);
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true }));
 

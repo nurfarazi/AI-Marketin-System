@@ -24,6 +24,25 @@ export type IngestionPayload = {
   csvText?: string;
 };
 
+export type NormalizedSourceData = {
+  kind: 'normalized';
+  sourceType: IngestionType;
+  content: string;
+  title?: string | null;
+  sourceName?: string | null;
+  url?: string | null;
+  imageName?: string | null;
+  imageUrl?: string | null;
+  rows?: unknown[] | null;
+  csvText?: string | null;
+  extractedText?: string | null;
+  summary?: string | null;
+  highlights?: string[];
+  entities?: Array<Record<string, unknown>>;
+  confidence?: number;
+  meta?: Record<string, unknown>;
+};
+
 export type Ingestion = {
   id: string;
   projectId: string;
@@ -42,7 +61,7 @@ export type NormalizedSource = {
   projectId: string;
   ingestionId: string;
   status: NormalizationStatus;
-  data?: unknown;
+  data?: NormalizedSourceData | null;
   error?: string;
   createdAt: string;
   updatedAt: string;

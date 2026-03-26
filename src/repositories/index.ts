@@ -22,6 +22,7 @@ export function createRepositories(_db: Db): Repositories {
       create: (source) => pipelineRepository.addNormalizedSource(source),
       listByProject: (projectId) => pipelineRepository.listNormalizedSources(projectId),
       getById: (id) => pipelineRepository.getNormalizedSource(id),
+      update: (id, update) => pipelineRepository.updateNormalizedSource(id, update).then(() => undefined),
     },
     analyses: {
       create: (analysis) => pipelineRepository.addAnalysis(analysis),
