@@ -1,0 +1,5 @@
+
+> ai-marketing-system@1.0.0 start
+> node dist/server.js
+
+AI Marketing System app is running on port 3001

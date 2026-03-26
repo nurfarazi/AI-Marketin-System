@@ -6,6 +6,8 @@ Minimal Express scaffold for the staged AI marketing pipeline. All AI/LLM featur
 
 The app defaults to port `5011` unless `PORT` is set in the environment.
 
+There is also a React dashboard in [`web/`](/mnt/d/git/Hobby/AI-Marketin-System/web) for creating projects, capturing inputs, running the workflow, and downloading reports.
+
 ## Prerequisites
 
 - Node.js 24+
@@ -19,23 +21,69 @@ Environment variables:
 - `MONGO_DB_NAME` (defaults to `ai_marketing_system`)
 - `OLLAMA_BASE_URL` (defaults to `http://127.0.0.1:11434`)
 - `OLLAMA_MODEL` (defaults to `llama3.1`)
+- `PORT` (defaults to `5011`)
 
 Copy [`.env.example`](/mnt/d/git/Hobby/AI-Marketin-System/.env.example) to `.env` to get the local defaults in one place.
 
-## Run
+## How To Run
+
+### 1. Prepare environment variables
+
+```bash
+cp .env.example .env
+```
+
+The example file is ready for local development. If you want the API to run on a different port, change `PORT` in `.env` and point the frontend to the same URL.
+
+### 2. Start MongoDB and Ollama
+
+Run both locally before starting the API, or use Docker Compose to bring MongoDB up for you.
+
+- MongoDB: `mongodb://127.0.0.1:27017`
+- Ollama: `http://127.0.0.1:11434`
+
+### 3. Install dependencies
 
 ```bash
 npm install
-npm start
+cd web
+npm install
+cd ..
 ```
 
-For local development:
+### 4. Run the backend
+
+Development mode:
 
 ```bash
 npm run dev
 ```
 
-For Docker:
+Production mode:
+
+```bash
+npm run build
+npm start
+```
+
+The API runs on `http://localhost:5011` by default.
+
+### 5. Run the frontend
+
+```bash
+npm run web:dev
+```
+
+Or run it directly from the frontend folder:
+
+```bash
+cd web
+npm run dev
+```
+
+Set `VITE_API_BASE_URL` in [`web/.env`](/mnt/d/git/Hobby/AI-Marketin-System/web/.env) if the API is not running on `http://localhost:5011`.
+
+### 6. Run everything with Docker
 
 ```bash
 docker compose up --build
