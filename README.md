@@ -81,7 +81,7 @@ cd web
 npm run dev
 ```
 
-Set `VITE_API_BASE_URL` in [`web/.env`](/mnt/d/git/Hobby/AI-Marketin-System/web/.env) if the API is not running on `http://localhost:5011`.
+Set `VITE_API_BASE_URL` in [`web/.env`](/mnt/d/git/Hobby/AI-Marketin-System/web/.env) to point the web app at your API before starting it.
 
 ### 6. Run everything with Docker
 

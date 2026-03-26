@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { createApiClient, type ApiError } from './api';
+import { ApiError, createApiClient } from './api';
 import type {
   Analysis,
   Creative,
@@ -36,9 +36,8 @@ type SourceDraft = {
   rowsJson: string;
 };
 
-const DEFAULT_API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.trim() || 'http://localhost:5011';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.trim() || 'http://127.0.0.1:5011';
 const STORAGE_KEYS = {
-  baseUrl: 'ai-marketing-web-base-url',
   activeProjectId: 'ai-marketing-web-active-project-id',
 };
 
@@ -227,12 +226,6 @@ function JsonBlock({ value }: { value: unknown }) {
 }
 
 export default function App() {
-  const [baseUrl, setBaseUrl] = useState(() => readLocalStorage(STORAGE_KEYS.baseUrl, DEFAULT_API_BASE_URL));
-  const [baseUrlDraft, setBaseUrlDraft] = useState(() => readLocalStorage(STORAGE_KEYS.baseUrl, DEFAULT_API_BASE_URL));
-  const [health, setHealth] = useState<{ state: 'idle' | 'checking' | 'online' | 'offline'; message: string }>({
-    state: 'idle',
-    message: 'Waiting for connection check.',
-  });
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeProjectId, setActiveProjectId] = useState(() =>
     readLocalStorage(STORAGE_KEYS.activeProjectId, ''),
@@ -247,7 +240,7 @@ export default function App() {
   const [sourceDraft, setSourceDraft] = useState<SourceDraft>(INITIAL_SOURCE_DRAFT);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
-  const api = useMemo(() => createApiClient(baseUrl), [baseUrl]);
+  const api = useMemo(() => createApiClient(API_BASE_URL), []);
 
   const activeProject = bundle.project ?? projects.find((project) => project.id === activeProjectId) ?? null;
   const ingestionIds = bundle.ingestions.map((item) => item.id);
@@ -258,10 +251,6 @@ export default function App() {
   const latestJob = latest(bundle.jobs);
 
   useEffect(() => {
-    saveLocalStorage(STORAGE_KEYS.baseUrl, baseUrl);
-  }, [baseUrl]);
-
-  useEffect(() => {
     saveLocalStorage(STORAGE_KEYS.activeProjectId, activeProjectId);
   }, [activeProjectId]);
 
@@ -270,42 +259,6 @@ export default function App() {
     const timer = window.setTimeout(() => setNotice(null), 3500);
     return () => window.clearTimeout(timer);
   }, [notice]);
-
-  async function handleSaveBaseUrl(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const nextBaseUrl = baseUrlDraft.trim() || DEFAULT_API_BASE_URL;
-    setBaseUrl(nextBaseUrl);
-    setBaseUrlDraft(nextBaseUrl);
-    setNotice({
-      tone: 'info',
-      title: 'API endpoint saved',
-      message: `The dashboard is now pointing at ${nextBaseUrl}.`,
-    });
-  }
-
-  useEffect(() => {
-    let active = true;
-    const check = async () => {
-      setHealth({ state: 'checking', message: 'Checking backend connection...' });
-      try {
-        const result = await api.health();
-        if (!active) return;
-        setHealth({
-          state: 'online',
-          message: `${result.service || 'API'} is online at ${baseUrl}`,
-        });
-      } catch (error) {
-        if (!active) return;
-        const message = error instanceof Error ? error.message : 'Unable to reach the API.';
-        setHealth({ state: 'offline', message });
-      }
-    };
-
-    void check();
-    return () => {
-      active = false;
-    };
-  }, [baseUrl]);
 
   useEffect(() => {
     let active = true;
@@ -334,7 +287,7 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, [activeProjectId, baseUrl]);
+  }, [activeProjectId, api]);
 
   useEffect(() => {
     if (!activeProjectId) return undefined;
@@ -381,7 +334,7 @@ export default function App() {
       active = false;
       window.clearInterval(interval);
     };
-  }, [activeProjectId, baseUrl]);
+  }, [activeProjectId, api]);
 
   async function refreshProjects(nextActiveId?: string) {
     const nextProjects = await api.listProjects();
@@ -607,39 +560,6 @@ export default function App() {
             <h1>AI Marketing System</h1>
           </div>
         </div>
-
-        <Panel
-          eyebrow="Connection"
-          title="Backend endpoint"
-          description="Point the app at any local or hosted API."
-          action={
-            <button className="button button--ghost" type="button" onClick={() => void refreshProjects()}>
-              Refresh
-            </button>
-          }
-        >
-          <form className="stack stack--tight" onSubmit={handleSaveBaseUrl}>
-            <Field label="API base URL" hint="Saved locally. Default: http://localhost:5011">
-              <input
-                className="input"
-                value={baseUrlDraft}
-                onChange={(event) => setBaseUrlDraft(event.target.value)}
-                placeholder="http://localhost:5011"
-              />
-            </Field>
-            <div className="status-strip">
-              <Pill tone={health.state === 'online' ? 'tone-success' : health.state === 'offline' ? 'tone-danger' : 'tone-warm'}>
-                {health.state.toUpperCase()}
-              </Pill>
-              <p>{health.message}</p>
-            </div>
-            <div className="button-row">
-              <button className="button button--primary" type="submit">
-                Save URL
-              </button>
-            </div>
-          </form>
-        </Panel>
 
         <Panel eyebrow="Create" title="New project" description="Start with a client, objective, and a working name.">
           <form className="stack stack--tight" onSubmit={handleCreateProject}>
