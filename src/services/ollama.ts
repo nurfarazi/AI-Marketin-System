@@ -38,11 +38,29 @@ type OllamaConfig = {
   temperature?: number;
 };
 
+const DEFAULT_BASE_URL = 'http://127.0.0.1:11434';
+const DEFAULT_MODEL = 'llama3.1';
+const DEFAULT_TEMPERATURE = 0.2;
+
+function isLocalOllamaHost(baseUrl: string) {
+  try {
+    const { hostname } = new URL(baseUrl);
+    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname === '[::1]';
+  } catch {
+    return false;
+  }
+}
+
 function getConfig(overrides?: OllamaConfig) {
+  const baseUrl = overrides?.baseUrl ?? readTrimmedEnv('OLLAMA_BASE_URL', DEFAULT_BASE_URL);
+  if (!isLocalOllamaHost(baseUrl)) {
+    throw new Error('OLLAMA_BASE_URL must point to localhost for safety.');
+  }
+
   return {
-    baseUrl: overrides?.baseUrl ?? readTrimmedEnv('OLLAMA_BASE_URL'),
-    model: overrides?.model ?? readTrimmedEnv('OLLAMA_MODEL'),
-    temperature: overrides?.temperature ?? readNumberEnv('OLLAMA_TEMPERATURE'),
+    baseUrl,
+    model: overrides?.model ?? readTrimmedEnv('OLLAMA_MODEL', DEFAULT_MODEL),
+    temperature: overrides?.temperature ?? readNumberEnv('OLLAMA_TEMPERATURE', DEFAULT_TEMPERATURE),
   };
 }
 

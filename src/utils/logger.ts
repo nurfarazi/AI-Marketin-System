@@ -18,6 +18,10 @@ const levelOrder: Record<LogLevel, number> = {
 };
 
 function resolveLevel(value: string | undefined): LogLevel {
+  if (!value) {
+    throw new Error('LOG_LEVEL must be one of: error, warn, info, debug.');
+  }
+
   const normalized = value.toLowerCase();
   if (normalized === 'error' || normalized === 'warn' || normalized === 'info' || normalized === 'debug') {
     return normalized;
