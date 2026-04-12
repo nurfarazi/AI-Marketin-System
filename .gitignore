@@ -6,6 +6,7 @@ dist/
 coverage/
 
 # Environment
+.env
 .env.*.local
 
 # Logs
