@@ -17,10 +17,8 @@
     "web:preview": "npm --prefix web run preview"
   },
   "dependencies": {
-    "dotenv": "^17.3.1",
     "express": "^5.2.1",
-    "mongodb": "^7.1.1",
-    "node-fetch": "^3.3.2"
+    "mongodb": "^7.1.1"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",

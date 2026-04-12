@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import { createApp } from './app';
 import { connectToMongo, disconnectMongo, ensureIndexes } from './db/mongo';
 import { createRepositories } from './repositories';
